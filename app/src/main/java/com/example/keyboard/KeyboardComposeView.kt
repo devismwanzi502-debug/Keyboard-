@@ -56,33 +56,6 @@ enum class TypeTarget {
     APP, AI_PROMPT
 }
 
-private val commonTyposMap = mapOf(
-    "teh" to "the",
-    "im" to "I'm",
-    "dont" to "don't",
-    "cant" to "can't",
-    "wont" to "won't",
-    "pls" to "please",
-    "plz" to "please",
-    "thx" to "thanks",
-    "btw" to "by the way",
-    "omg" to "oh my god",
-    "idk" to "I don't know",
-    "ur" to "your",
-    "r" to "are",
-    "u" to "you",
-    "y" to "why",
-    "shd" to "should",
-    "wud" to "would",
-    "cud" to "could",
-    "alot" to "a lot",
-    "definately" to "definitely",
-    "receive" to "receive",
-    "realy" to "really",
-    "greatfull" to "grateful",
-    "separate" to "separate"
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyboardComposeView(
@@ -105,10 +78,6 @@ fun KeyboardComposeView(
     var customPromptInput by remember { mutableStateOf("") }
     var typeTarget by remember { mutableStateOf(TypeTarget.APP) }
     
-    // Auto-Correct state
-    val autoCorrectEnabled by settingsRepository.autoCorrectFlow.collectAsState(initial = true)
-    var currentWord by remember { mutableStateOf("") }
-    
     // Clipboard history state
     val clipList = remember { mutableStateListOf<String>() }
     
@@ -124,31 +93,13 @@ fun KeyboardComposeView(
     val panelBackground = Color(0xFF141622)
 
     val isShifted = shiftState != ShiftState.OFF
-
+    
     // Unified Key Processing Logic
     val handleKeyInput: (String) -> Unit = { char ->
         if (activePanel == KeyboardPanel.AI && typeTarget == TypeTarget.AI_PROMPT) {
             customPromptInput += char
         } else {
-            if (char == " ") {
-                if (autoCorrectEnabled && currentWord.isNotBlank()) {
-                    val lower = currentWord.lowercase()
-                    if (commonTyposMap.containsKey(lower)) {
-                        val correction = commonTyposMap[lower]!!
-                        // Remove typed typo length from input connection and insert correction
-                        repeat(currentWord.length) { onBackspace() }
-                        onKeyPress(correction)
-                    }
-                }
-                currentWord = ""
-                onKeyPress(" ")
-            } else if (char.length == 1 && char[0].isLetterOrDigit()) {
-                currentWord += char
-                onKeyPress(char)
-            } else {
-                currentWord = ""
-                onKeyPress(char)
-            }
+            onKeyPress(char)
         }
     }
 
@@ -158,9 +109,6 @@ fun KeyboardComposeView(
                 customPromptInput = customPromptInput.dropLast(1)
             }
         } else {
-            if (currentWord.isNotEmpty()) {
-                currentWord = currentWord.dropLast(1)
-            }
             onBackspace()
         }
     }
@@ -186,40 +134,6 @@ fun KeyboardComposeView(
             accentColor = primaryAccent,
             textColor = textColor
         )
-
-        // Word Suggestion / Auto-Correct Bar
-        val suggestedCorrection = if (autoCorrectEnabled && currentWord.isNotBlank()) commonTyposMap[currentWord.lowercase()] else null
-        if (autoCorrectEnabled && currentWord.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .background(panelBackground)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                if (suggestedCorrection != null) {
-                    SuggestionChip(
-                        onClick = {
-                            repeat(currentWord.length) { onBackspace() }
-                            onKeyPress(suggestedCorrection)
-                            currentWord = ""
-                        },
-                        label = { Text("✨ $suggestedCorrection", color = secondaryAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = currentWord,
-                    color = textColor.copy(alpha = 0.7f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.clickable {
-                        currentWord = ""
-                    }
-                )
-            }
-        }
 
         // Dynamic AI Panels (Rizz, Reply, Custom Prompt, Emoji Grid, Clipboard)
         AnimatedVisibility(

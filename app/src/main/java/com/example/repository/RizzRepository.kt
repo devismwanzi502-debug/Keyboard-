@@ -36,11 +36,25 @@ class RizzRepository(
     ): String {
         val provider = settingsRepository.apiProviderFlow.first()
         
-        return if (provider == "Groq") {
+        val firstChoice = if (provider == "Groq") {
             generateGroqReply(message, style, contextMessages, useMemory)
         } else {
             generateGeminiReply(message, style, contextMessages, useMemory)
         }
+
+        // If primary provider hit an error, attempt fallback provider
+        if (firstChoice.startsWith("Error generating reply:")) {
+            val fallbackChoice = if (provider == "Groq") {
+                generateGeminiReply(message, style, contextMessages, useMemory)
+            } else {
+                generateGroqReply(message, style, contextMessages, useMemory)
+            }
+            if (!fallbackChoice.startsWith("Error generating reply:") && !fallbackChoice.startsWith("Please configure")) {
+                return fallbackChoice
+            }
+        }
+
+        return firstChoice
     }
     
     private suspend fun generateGeminiReply(
@@ -50,25 +64,28 @@ class RizzRepository(
         useMemory: Boolean
     ): String {
         val userKey = settingsRepository.apiKeyFlow.first()
-        val defaultKey = BuildConfig.GEMINI_API_KEY
-        val keyToUse = if (!userKey.isNullOrBlank()) userKey else defaultKey
+        val keyToUse = when {
+            !userKey.isNullOrBlank() -> userKey
+            BuildConfig.GEMINI_API_KEY.isNotEmpty() -> BuildConfig.GEMINI_API_KEY
+            else -> SettingsRepository.DEFAULT_GEMINI_API_KEY
+        }
         
         if (keyToUse.isEmpty()) {
             return "Please configure your Gemini API Key in Settings."
         }
         
         val systemPrompt = "You are a witty, smart chat assistant for an Android keyboard. " +
-            "Generate a short, natural reply to the user's message in the following style: $style. " +
-            "Do not include quotes or extra formatting, just the raw text of the reply. " +
-            "Keep it strictly under 3 sentences."
+            "Answer the user's prompt or generate a natural reply in the style: $style. " +
+            "Do not include quotes or extra formatting, just the direct answer or reply text. " +
+            "Keep it concise, helpful, and natural (under 3 sentences)."
             
         val contextPrompt = if (useMemory && contextMessages.isNotEmpty()) {
             val history = contextMessages.take(5).reversed().joinToString("\n") { 
                 if (it.isIncoming) "Them: ${it.text}" else "Me: ${it.text}"
             }
-            "Recent context:\n$history\n\nLatest message: Them: $message\n\nReply as Me:"
+            "Context:\n$history\n\nPrompt or Message: $message"
         } else {
-            "Latest message: Them: $message\n\nReply as Me:"
+            "Prompt or Message: $message"
         }
 
         val request = GenerateContentRequest(
@@ -78,9 +95,10 @@ class RizzRepository(
 
         return try {
             val response = RetrofitClient.service.generateContent(keyToUse, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "No response generated."
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() 
+                ?: "No response generated."
         } catch (e: Exception) {
-            "Error generating reply: ${e.message}"
+            "Error generating reply: ${e.localizedMessage ?: e.message}"
         }
     }
 
@@ -91,22 +109,24 @@ class RizzRepository(
         useMemory: Boolean
     ): String {
         val userKey = settingsRepository.groqApiKeyFlow.first()
-        if (userKey.isNullOrBlank()) {
+        val keyToUse = if (!userKey.isNullOrBlank()) userKey else SettingsRepository.DEFAULT_GROQ_API_KEY
+        
+        if (keyToUse.isEmpty()) {
             return "Please configure your Groq API Key in Settings."
         }
         
         val systemPrompt = "You are a witty, smart chat assistant for an Android keyboard. " +
-            "Generate a short, natural reply to the user's message in the following style: $style. " +
-            "Do not include quotes or extra formatting, just the raw text of the reply. " +
-            "Keep it strictly under 3 sentences."
+            "Answer the user's prompt or generate a natural reply in the style: $style. " +
+            "Do not include quotes or extra formatting, just the direct answer or reply text. " +
+            "Keep it concise, helpful, and natural (under 3 sentences)."
             
         val contextPrompt = if (useMemory && contextMessages.isNotEmpty()) {
             val history = contextMessages.take(5).reversed().joinToString("\n") { 
                 if (it.isIncoming) "Them: ${it.text}" else "Me: ${it.text}"
             }
-            "Recent context:\n$history\n\nLatest message: Them: $message\n\nReply as Me:"
+            "Context:\n$history\n\nPrompt or Message: $message"
         } else {
-            "Latest message: Them: $message\n\nReply as Me:"
+            "Prompt or Message: $message"
         }
 
         val messages = listOf(
@@ -115,15 +135,15 @@ class RizzRepository(
         )
 
         val request = GroqRequest(
-            model = "llama3-8b-8192",
+            model = "llama-3.1-8b-instant",
             messages = messages
         )
 
         return try {
-            val response = GroqRetrofitClient.service.generateContent("Bearer $userKey", request)
+            val response = GroqRetrofitClient.service.generateContent("Bearer $keyToUse", request)
             response.choices?.firstOrNull()?.message?.content?.trim() ?: "No response generated."
         } catch (e: Exception) {
-            "Error generating reply: ${e.message}"
+            "Error generating reply: ${e.localizedMessage ?: e.message}"
         }
     }
 }

@@ -84,7 +84,6 @@ fun MainScreen(
     
     val autoType by settingsRepository.autoTypeFlow.collectAsState(initial = false)
     val memory by settingsRepository.conversationMemoryFlow.collectAsState(initial = true)
-    val autoCorrect by settingsRepository.autoCorrectFlow.collectAsState(initial = true)
     
     var apiKeyInput by remember(apiKey) { mutableStateOf(apiKey ?: "") }
     var groqApiKeyInput by remember(groqApiKey) { mutableStateOf(groqApiKey ?: "") }
@@ -359,23 +358,6 @@ fun MainScreen(
                 }
                 
                 HorizontalDivider()
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Auto-Correct", fontWeight = FontWeight.Bold)
-                        Text("Fix common typos & suggest completions", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(
-                        checked = autoCorrect,
-                        onCheckedChange = { 
-                            coroutineScope.launch { settingsRepository.setAutoCorrect(it) } 
-                        }
-                    )
-                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

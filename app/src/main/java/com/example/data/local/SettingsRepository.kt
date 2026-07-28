@@ -19,13 +19,17 @@ class SettingsRepository(context: Context) {
 
     private val appContext = context.applicationContext
 
+    companion object {
+        const val DEFAULT_GROQ_API_KEY = ""
+        const val DEFAULT_GEMINI_API_KEY = ""
+    }
+
     private val API_KEY = stringPreferencesKey("api_key")
     private val GROQ_API_KEY = stringPreferencesKey("groq_api_key")
     private val API_PROVIDER = stringPreferencesKey("api_provider")
     
     private val AUTO_TYPE = booleanPreferencesKey("auto_type")
     private val CONVERSATION_MEMORY = booleanPreferencesKey("conversation_memory")
-    private val AUTO_CORRECT = booleanPreferencesKey("auto_correct")
     private val REPLY_STYLE = stringPreferencesKey("reply_style")
 
     private val sharedPrefs = appContext.getSharedPreferences("rizzboard_prefs", Context.MODE_PRIVATE)
@@ -39,15 +43,17 @@ class SettingsRepository(context: Context) {
     }
 
     val apiKeyFlow: Flow<String?> = safeData.map { preferences ->
-        preferences[API_KEY] ?: sharedPrefs.getString("api_key", null)
+        val saved = preferences[API_KEY] ?: sharedPrefs.getString("api_key", null)
+        if (saved.isNullOrBlank()) DEFAULT_GEMINI_API_KEY else saved
     }
 
     val groqApiKeyFlow: Flow<String?> = safeData.map { preferences ->
-        preferences[GROQ_API_KEY] ?: sharedPrefs.getString("groq_api_key", null)
+        val saved = preferences[GROQ_API_KEY] ?: sharedPrefs.getString("groq_api_key", null)
+        if (saved.isNullOrBlank()) DEFAULT_GROQ_API_KEY else saved
     }
     
     val apiProviderFlow: Flow<String> = safeData.map { preferences ->
-        preferences[API_PROVIDER] ?: sharedPrefs.getString("api_provider", "Gemini") ?: "Gemini"
+        preferences[API_PROVIDER] ?: sharedPrefs.getString("api_provider", "Groq") ?: "Groq"
     }
 
     val autoTypeFlow: Flow<Boolean> = safeData.map { preferences ->
@@ -56,10 +62,6 @@ class SettingsRepository(context: Context) {
 
     val conversationMemoryFlow: Flow<Boolean> = safeData.map { preferences ->
         preferences[CONVERSATION_MEMORY] ?: sharedPrefs.getBoolean("conversation_memory", true)
-    }
-
-    val autoCorrectFlow: Flow<Boolean> = safeData.map { preferences ->
-        preferences[AUTO_CORRECT] ?: sharedPrefs.getBoolean("auto_correct", true)
     }
     
     val replyStyleFlow: Flow<String> = safeData.map { preferences ->
@@ -115,17 +117,6 @@ class SettingsRepository(context: Context) {
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[CONVERSATION_MEMORY] = enabled
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    suspend fun setAutoCorrect(enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("auto_correct", enabled).apply()
-        try {
-            appContext.dataStore.edit { preferences ->
-                preferences[AUTO_CORRECT] = enabled
             }
         } catch (e: Exception) {
             e.printStackTrace()
