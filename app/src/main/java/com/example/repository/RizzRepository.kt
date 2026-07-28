@@ -97,6 +97,9 @@ class RizzRepository(
             val response = RetrofitClient.service.generateContent(keyToUse, request)
             response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() 
                 ?: "No response generated."
+        } catch (e: retrofit2.HttpException) {
+            val errorDetails = e.response()?.errorBody()?.string() ?: e.message()
+            "Error generating reply: HTTP ${e.code()} - $errorDetails"
         } catch (e: Exception) {
             "Error generating reply: ${e.localizedMessage ?: e.message}"
         }
@@ -142,6 +145,9 @@ class RizzRepository(
         return try {
             val response = GroqRetrofitClient.service.generateContent("Bearer $keyToUse", request)
             response.choices?.firstOrNull()?.message?.content?.trim() ?: "No response generated."
+        } catch (e: retrofit2.HttpException) {
+            val errorDetails = e.response()?.errorBody()?.string() ?: e.message()
+            "Error generating reply: HTTP ${e.code()} - $errorDetails"
         } catch (e: Exception) {
             "Error generating reply: ${e.localizedMessage ?: e.message}"
         }

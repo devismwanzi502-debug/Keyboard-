@@ -98,6 +98,9 @@ class RizzInputMethodService : InputMethodService(),
                             val ic = currentInputConnection ?: return@KeyboardComposeView
                             ic.commitText(text, 1)
                         },
+                        onGetContextText = {
+                            currentInputConnection?.getTextBeforeCursor(1000, 0) ?: ""
+                        },
                         onSwitchKeyboard = {
                             try {
                                 switchInputMethod("com.android.inputmethod.latin/.LatinIME")

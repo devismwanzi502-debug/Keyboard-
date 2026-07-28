@@ -64,6 +64,7 @@ fun KeyboardComposeView(
     onKeyPress: (String) -> Unit,
     onBackspace: () -> Unit,
     onInsertText: (String) -> Unit,
+    onGetContextText: () -> CharSequence = { "" },
     onSwitchKeyboard: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -82,6 +83,7 @@ fun KeyboardComposeView(
     val clipList = remember { mutableStateListOf<String>() }
     
     val recentMessages by repository.recentMessages.collectAsState(initial = emptyList())
+    val autoTypeEnabled by settingsRepository.autoTypeFlow.collectAsState(initial = false)
     
     // Theme Palette
     val keyboardBackground = Color(0xFF0D0E15)
@@ -155,8 +157,18 @@ fun KeyboardComposeView(
                                 generatedReply = null
                                 activePanel = KeyboardPanel.None
                                 try {
-                                    val latestMessage = recentMessages.firstOrNull { it.isIncoming }?.text ?: "Hey, what's up?"
+                                    val textBeforeCursor = onGetContextText().toString()
+                                    val latestMessage = if (textBeforeCursor.isNotBlank()) {
+                                        textBeforeCursor
+                                    } else {
+                                        recentMessages.firstOrNull { it.isIncoming }?.text ?: "Hey, what's up?"
+                                    }
+                                    
                                     val memoryEnabled = settingsRepository.conversationMemoryFlow.first()
+                                    
+                                    if (memoryEnabled && textBeforeCursor.isNotBlank()) {
+                                        repository.insertMessage(latestMessage, isIncoming = true)
+                                    }
                                     
                                     val reply = repository.generateReply(
                                         message = latestMessage,
@@ -164,7 +176,17 @@ fun KeyboardComposeView(
                                         contextMessages = recentMessages,
                                         useMemory = memoryEnabled
                                     )
-                                    generatedReply = reply
+                                    
+                                    if (memoryEnabled && !reply.startsWith("Error generating reply:")) {
+                                        repository.insertMessage(reply, isIncoming = false)
+                                    }
+                                    
+                                    if (autoTypeEnabled && !reply.startsWith("Error generating reply:")) {
+                                        onInsertText(reply)
+                                        generatedReply = null
+                                    } else {
+                                        generatedReply = reply
+                                    }
                                 } catch (e: Exception) {
                                     generatedReply = "Rizz AI: ${e.localizedMessage}"
                                 } finally {
@@ -272,13 +294,36 @@ fun KeyboardComposeView(
                                             isGenerating = true
                                             generatedReply = null
                                             try {
+                                                val memoryEnabled = settingsRepository.conversationMemoryFlow.first()
+                                                if (memoryEnabled) {
+                                                    repository.insertMessage(prompt, isIncoming = true)
+                                                }
+                                                
+                                                val textBeforeCursor = onGetContextText().toString()
+                                                val contextMessagesList = if (memoryEnabled) recentMessages else emptyList()
+                                                val finalMessage = if (textBeforeCursor.isNotBlank()) {
+                                                    "User text: $textBeforeCursor\nPrompt: $prompt"
+                                                } else {
+                                                    prompt
+                                                }
+
                                                 val reply = repository.generateReply(
-                                                    message = prompt,
+                                                    message = finalMessage,
                                                     style = "Creative",
-                                                    contextMessages = emptyList(),
-                                                    useMemory = false
+                                                    contextMessages = contextMessagesList,
+                                                    useMemory = memoryEnabled
                                                 )
-                                                generatedReply = reply
+                                                
+                                                if (memoryEnabled && !reply.startsWith("Error generating reply:")) {
+                                                    repository.insertMessage(reply, isIncoming = false)
+                                                }
+                                                
+                                                if (autoTypeEnabled && !reply.startsWith("Error generating reply:")) {
+                                                    onInsertText(reply)
+                                                    generatedReply = null
+                                                } else {
+                                                    generatedReply = reply
+                                                }
                                             } catch (e: Exception) {
                                                 generatedReply = "Error: ${e.localizedMessage}"
                                             } finally {

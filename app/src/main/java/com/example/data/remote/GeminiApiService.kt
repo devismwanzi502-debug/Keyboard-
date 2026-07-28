@@ -1,6 +1,5 @@
 package com.example.data.remote
 
-import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -13,7 +12,7 @@ import java.util.concurrent.TimeUnit
 @JsonClass(generateAdapter = true)
 data class GenerateContentRequest(
     val contents: List<Content>,
-    @Json(name = "system_instruction") val systemInstruction: Content? = null
+    val systemInstruction: Content? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -37,7 +36,7 @@ data class Candidate(
 )
 
 interface GeminiApiService {
-    @POST("v1beta/models/gemini-1.5-flash:generateContent")
+    @POST("v1beta/models/gemini-3.5-flash:generateContent")
     suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest
