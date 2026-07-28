@@ -53,5 +53,8 @@ class RizzInputMethodService : InputMethodService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::composeView.isInitialized) {
+            composeView.dispose()
+        }
     }
 }

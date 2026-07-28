@@ -17,7 +17,6 @@
         <service
             android:name=".keyboard.RizzInputMethodService"
             android:label="@string/ime_name"
-            android:icon="@mipmap/ic_launcher"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:exported="true">
             <intent-filter>
@@ -32,8 +31,7 @@
             android:name=".service.RizzAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
-            android:label="@string/accessibility_service_label"
-            android:icon="@mipmap/ic_launcher">
+            android:label="@string/accessibility_service_label">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>

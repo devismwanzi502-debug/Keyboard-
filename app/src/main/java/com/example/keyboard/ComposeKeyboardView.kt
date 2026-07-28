@@ -50,7 +50,11 @@ class ComposeKeyboardView @JvmOverloads constructor(
         super.onDetachedFromWindow()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+    }
+
+    fun dispose() {
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+        store.clear()
     }
 
     override val lifecycle: Lifecycle

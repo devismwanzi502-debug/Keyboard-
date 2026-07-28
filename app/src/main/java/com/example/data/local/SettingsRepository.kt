@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class SettingsRepository(private val context: Context) {
+class SettingsRepository(context: Context) {
+
+    private val appContext = context.applicationContext
 
     private val API_KEY = stringPreferencesKey("api_key")
     private val GROQ_API_KEY = stringPreferencesKey("groq_api_key")
@@ -22,62 +24,62 @@ class SettingsRepository(private val context: Context) {
     private val CONVERSATION_MEMORY = booleanPreferencesKey("conversation_memory")
     private val REPLY_STYLE = stringPreferencesKey("reply_style")
 
-    val apiKeyFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+    val apiKeyFlow: Flow<String?> = appContext.dataStore.data.map { preferences ->
         preferences[API_KEY]
     }
 
-    val groqApiKeyFlow: Flow<String?> = context.dataStore.data.map { preferences ->
+    val groqApiKeyFlow: Flow<String?> = appContext.dataStore.data.map { preferences ->
         preferences[GROQ_API_KEY]
     }
     
-    val apiProviderFlow: Flow<String> = context.dataStore.data.map { preferences ->
+    val apiProviderFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
         preferences[API_PROVIDER] ?: "Gemini"
     }
 
-    val autoTypeFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val autoTypeFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
         preferences[AUTO_TYPE] ?: false
     }
 
-    val conversationMemoryFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val conversationMemoryFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
         preferences[CONVERSATION_MEMORY] ?: true
     }
     
-    val replyStyleFlow: Flow<String> = context.dataStore.data.map { preferences ->
+    val replyStyleFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
         preferences[REPLY_STYLE] ?: "Smooth"
     }
 
     suspend fun saveApiKey(apiKey: String) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[API_KEY] = apiKey
         }
     }
 
     suspend fun saveGroqApiKey(apiKey: String) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[GROQ_API_KEY] = apiKey
         }
     }
     
     suspend fun setApiProvider(provider: String) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[API_PROVIDER] = provider
         }
     }
 
     suspend fun setAutoType(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[AUTO_TYPE] = enabled
         }
     }
 
     suspend fun setConversationMemory(enabled: Boolean) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[CONVERSATION_MEMORY] = enabled
         }
     }
     
     suspend fun setReplyStyle(style: String) {
-        context.dataStore.edit { preferences ->
+        appContext.dataStore.edit { preferences ->
             preferences[REPLY_STYLE] = style
         }
     }
