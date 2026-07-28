@@ -22,10 +22,15 @@ class RizzInputMethodService : InputMethodService() {
     }
 
     override fun onCreateInputView(): View {
-        composeView = ComposeKeyboardView(this)
+        composeView = ComposeKeyboardView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
         
         composeView.content = {
-            KeyboardScreen(
+            KeyboardComposeView(
                 repository = repository,
                 settingsRepository = settingsRepository,
                 onKeyPress = { text ->
