@@ -1,10 +1,12 @@
 package com.example.keyboard
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -367,19 +370,46 @@ fun KeyButton(
     iconColor: Color = Color(0xFFE2E2E2),
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = tween(durationMillis = 100),
+        label = "KeyScale"
+    )
+    
+    val alpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.7f else 1f,
+        animationSpec = tween(durationMillis = 100),
+        label = "KeyAlpha"
+    )
+
     Box(
         modifier = modifier
             .height(52.dp) // Premium height, similar to Gboard
             .shadow(1.dp, RoundedCornerShape(8.dp))
             .clip(RoundedCornerShape(8.dp))
-            .background(containerColor)
-            .clickable(onClick = onClick),
+            .background(containerColor.copy(alpha = alpha))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
-        if (text != null) {
-            Text(text = text, color = textColor, fontSize = 22.sp, fontWeight = FontWeight.Normal)
-        } else if (icon != null) {
-            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+        Box(
+            modifier = Modifier.graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            if (text != null) {
+                Text(text = text, color = textColor, fontSize = 22.sp, fontWeight = FontWeight.Normal)
+            } else if (icon != null) {
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+            }
         }
     }
 }
