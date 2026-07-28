@@ -31,7 +31,7 @@ jobs:
     - name: Build with Gradle
       env:
         _JAVA_OPTIONS: "-Djava.awt.headless=true"
-      run: gradle assembleDebug --no-daemon
+      run: gradle assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
