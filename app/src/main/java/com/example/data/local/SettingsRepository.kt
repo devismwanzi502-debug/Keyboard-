@@ -5,10 +5,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import java.io.IOException
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -24,63 +27,96 @@ class SettingsRepository(context: Context) {
     private val CONVERSATION_MEMORY = booleanPreferencesKey("conversation_memory")
     private val REPLY_STYLE = stringPreferencesKey("reply_style")
 
-    val apiKeyFlow: Flow<String?> = appContext.dataStore.data.map { preferences ->
+    private val safeData: Flow<Preferences> = appContext.dataStore.data.catch { exception ->
+        if (exception is IOException) {
+            emit(emptyPreferences())
+        } else {
+            throw exception
+        }
+    }
+
+    val apiKeyFlow: Flow<String?> = safeData.map { preferences ->
         preferences[API_KEY]
     }
 
-    val groqApiKeyFlow: Flow<String?> = appContext.dataStore.data.map { preferences ->
+    val groqApiKeyFlow: Flow<String?> = safeData.map { preferences ->
         preferences[GROQ_API_KEY]
     }
     
-    val apiProviderFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
+    val apiProviderFlow: Flow<String> = safeData.map { preferences ->
         preferences[API_PROVIDER] ?: "Gemini"
     }
 
-    val autoTypeFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
+    val autoTypeFlow: Flow<Boolean> = safeData.map { preferences ->
         preferences[AUTO_TYPE] ?: false
     }
 
-    val conversationMemoryFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
+    val conversationMemoryFlow: Flow<Boolean> = safeData.map { preferences ->
         preferences[CONVERSATION_MEMORY] ?: true
     }
     
-    val replyStyleFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
+    val replyStyleFlow: Flow<String> = safeData.map { preferences ->
         preferences[REPLY_STYLE] ?: "Smooth"
     }
 
     suspend fun saveApiKey(apiKey: String) {
-        appContext.dataStore.edit { preferences ->
-            preferences[API_KEY] = apiKey
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[API_KEY] = apiKey
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     suspend fun saveGroqApiKey(apiKey: String) {
-        appContext.dataStore.edit { preferences ->
-            preferences[GROQ_API_KEY] = apiKey
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[GROQ_API_KEY] = apiKey
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     
     suspend fun setApiProvider(provider: String) {
-        appContext.dataStore.edit { preferences ->
-            preferences[API_PROVIDER] = provider
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[API_PROVIDER] = provider
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     suspend fun setAutoType(enabled: Boolean) {
-        appContext.dataStore.edit { preferences ->
-            preferences[AUTO_TYPE] = enabled
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[AUTO_TYPE] = enabled
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     suspend fun setConversationMemory(enabled: Boolean) {
-        appContext.dataStore.edit { preferences ->
-            preferences[CONVERSATION_MEMORY] = enabled
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[CONVERSATION_MEMORY] = enabled
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     
     suspend fun setReplyStyle(style: String) {
-        appContext.dataStore.edit { preferences ->
-            preferences[REPLY_STYLE] = style
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[REPLY_STYLE] = style
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
+

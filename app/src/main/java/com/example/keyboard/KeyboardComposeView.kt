@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,13 +26,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.SettingsRepository
 import com.example.repository.RizzRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+enum class KeyboardMode {
+    ALPHA, NUMERIC, SYMBOL
+}
+
+enum class ShiftState {
+    OFF, ON, CAPS_LOCK
+}
+
+enum class KeyboardPanel {
+    None, AI, RizzModes, Reply, Emoji, Rewrite, Settings
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,31 +52,38 @@ fun KeyboardComposeView(
     settingsRepository: SettingsRepository,
     onKeyPress: (String) -> Unit,
     onBackspace: () -> Unit,
-    onInsertText: (String) -> Unit
+    onInsertText: (String) -> Unit,
+    onSwitchKeyboard: (() -> Unit)? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
-    var isShiftEnabled by remember { mutableStateOf(false) }
+    var keyboardMode by remember { mutableStateOf(KeyboardMode.ALPHA) }
+    var shiftState by remember { mutableStateOf(ShiftState.OFF) }
+    
     var generatedReply by remember { mutableStateOf<String?>(null) }
     var isGenerating by remember { mutableStateOf(false) }
     var activePanel by remember { mutableStateOf<KeyboardPanel>(KeyboardPanel.None) }
+    var customPromptInput by remember { mutableStateOf("") }
     
     val recentMessages by repository.recentMessages.collectAsState(initial = emptyList())
     
-    // AMOLED Dark Theme colors
-    val keyboardBackground = Color(0xFF000000)
-    val keyBackground = Color(0xFF1E1E1E)
-    val actionKeyBackground = Color(0xFF2C2C2C)
-    val textColor = Color(0xFFE3E3E3)
-    val primaryAccent = Color(0xFF8AB4F8)
-    val panelBackground = Color(0xFF121212)
-    
+    // Premium Dark Theme Palette
+    val keyboardBackground = Color(0xFF0D0E15)
+    val keyBackground = Color(0xFF1B1D2A)
+    val actionKeyBackground = Color(0xFF272A3D)
+    val textColor = Color(0xFFF0F2FA)
+    val primaryAccent = Color(0xFF9D7BFF)
+    val secondaryAccent = Color(0xFF00E5FF)
+    val panelBackground = Color(0xFF141622)
+
+    val isShifted = shiftState != ShiftState.OFF
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(keyboardBackground)
-            .padding(bottom = 4.dp)
+            .padding(bottom = 6.dp, top = 2.dp)
     ) {
-        // Smart Bar
+        // Smart Bar Header
         SmartBar(
             onActionClick = { panel ->
                 activePanel = if (activePanel == panel) KeyboardPanel.None else panel
@@ -77,17 +94,17 @@ fun KeyboardComposeView(
             textColor = textColor
         )
 
-        // Dynamic Panels (Rizz, Reply, AI, etc)
+        // Dynamic AI Panels (Rizz, Reply, Custom Prompt, Emoji)
         AnimatedVisibility(
             visible = activePanel != KeyboardPanel.None || generatedReply != null || isGenerating,
-            enter = expandVertically(animationSpec = tween(300)) + fadeIn(tween(300)),
-            exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(tween(300))
+            enter = expandVertically(animationSpec = tween(250)) + fadeIn(tween(250)),
+            exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(tween(250))
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(panelBackground)
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = 8.dp, horizontal = 8.dp)
             ) {
                 if (activePanel == KeyboardPanel.RizzModes) {
                     RizzModeSelector(
@@ -96,21 +113,96 @@ fun KeyboardComposeView(
                                 isGenerating = true
                                 generatedReply = null
                                 activePanel = KeyboardPanel.None
-                                val latestMessage = recentMessages.firstOrNull { it.isIncoming }?.text ?: "Hello"
-                                val memoryEnabled = settingsRepository.conversationMemoryFlow.first()
-                                
-                                val reply = repository.generateReply(
-                                    message = latestMessage,
-                                    style = style,
-                                    contextMessages = recentMessages,
-                                    useMemory = memoryEnabled
-                                )
-                                generatedReply = reply
-                                isGenerating = false
+                                try {
+                                    val latestMessage = recentMessages.firstOrNull { it.isIncoming }?.text ?: "Hey, what's up?"
+                                    val memoryEnabled = settingsRepository.conversationMemoryFlow.first()
+                                    
+                                    val reply = repository.generateReply(
+                                        message = latestMessage,
+                                        style = style,
+                                        contextMessages = recentMessages,
+                                        useMemory = memoryEnabled
+                                    )
+                                    generatedReply = reply
+                                } catch (e: Exception) {
+                                    generatedReply = "Rizz AI: ${e.localizedMessage}"
+                                } finally {
+                                    isGenerating = false
+                                }
                             }
                         },
                         textColor = textColor,
                         accentColor = primaryAccent
+                    )
+                }
+
+                if (activePanel == KeyboardPanel.AI) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "✨ Ask Rizz AI Anything",
+                            color = primaryAccent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = customPromptInput,
+                                onValueChange = { customPromptInput = it },
+                                placeholder = { Text("Write a funny line about...", color = Color.Gray, fontSize = 13.sp) },
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = primaryAccent,
+                                    unfocusedBorderColor = actionKeyBackground,
+                                    focusedTextColor = textColor,
+                                    unfocusedTextColor = textColor
+                                )
+                            )
+                            Button(
+                                onClick = {
+                                    if (customPromptInput.isNotBlank()) {
+                                        val prompt = customPromptInput
+                                        customPromptInput = ""
+                                        activePanel = KeyboardPanel.None
+                                        coroutineScope.launch {
+                                            isGenerating = true
+                                            generatedReply = null
+                                            try {
+                                                val reply = repository.generateReply(
+                                                    message = prompt,
+                                                    style = "Creative",
+                                                    contextMessages = emptyList(),
+                                                    useMemory = false
+                                                )
+                                                generatedReply = reply
+                                            } catch (e: Exception) {
+                                                generatedReply = "Error: ${e.localizedMessage}"
+                                            } finally {
+                                                isGenerating = false
+                                            }
+                                        }
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent)
+                            ) {
+                                Text("Ask", color = Color.Black)
+                            }
+                        }
+                    }
+                }
+
+                if (activePanel == KeyboardPanel.Emoji) {
+                    EmojiQuickBar(
+                        onEmojiClick = { emoji ->
+                            onKeyPress(emoji)
+                        },
+                        textColor = textColor
                     )
                 }
 
@@ -127,7 +219,7 @@ fun KeyboardComposeView(
                         onClear = { generatedReply = null },
                         backgroundColor = actionKeyBackground,
                         textColor = textColor,
-                        accentColor = primaryAccent
+                        accentColor = secondaryAccent
                     )
                 }
             }
@@ -135,55 +227,210 @@ fun KeyboardComposeView(
 
         Spacer(modifier = Modifier.height(4.dp))
         
-        // QWERTY Keys
-        val row1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
-        val row2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
-        val row3 = listOf("z", "x", "c", "v", "b", "n", "m")
-        
-        KeyboardRow(keys = row1, isShiftEnabled = isShiftEnabled, onKeyPress = onKeyPress, keyColor = keyBackground, textColor = textColor)
-        KeyboardRow(keys = row2, isShiftEnabled = isShiftEnabled, onKeyPress = onKeyPress, modifier = Modifier.padding(horizontal = 16.dp), keyColor = keyBackground, textColor = textColor)
-        
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            KeyButton(
-                icon = Icons.Default.KeyboardArrowUp,
-                modifier = Modifier.weight(1.25f),
-                containerColor = if (isShiftEnabled) primaryAccent else actionKeyBackground,
-                iconColor = if (isShiftEnabled) keyboardBackground else textColor,
-                onClick = { isShiftEnabled = !isShiftEnabled }
-            )
-            KeyboardRow(keys = row3, isShiftEnabled = isShiftEnabled, onKeyPress = onKeyPress, modifier = Modifier.weight(7f), keyColor = keyBackground, textColor = textColor)
-            KeyButton(
-                icon = Icons.AutoMirrored.Filled.Backspace,
-                modifier = Modifier.weight(1.25f),
-                containerColor = actionKeyBackground,
-                iconColor = textColor,
-                onClick = onBackspace
-            )
+        // Dynamic Keypad depending on mode (ALPHA, NUMERIC, SYMBOL)
+        when (keyboardMode) {
+            KeyboardMode.ALPHA -> {
+                val row1 = listOf("q", "w", "e", "r", "t", "y", "u", "i", "o", "p")
+                val row2 = listOf("a", "s", "d", "f", "g", "h", "j", "k", "l")
+                val row3 = listOf("z", "x", "c", "v", "b", "n", "m")
+
+                KeyboardRow(
+                    keys = row1,
+                    isShifted = isShifted,
+                    onKeyPress = { key ->
+                        onKeyPress(key)
+                        if (shiftState == ShiftState.ON) shiftState = ShiftState.OFF
+                    },
+                    keyColor = keyBackground,
+                    textColor = textColor
+                )
+                
+                KeyboardRow(
+                    keys = row2,
+                    isShifted = isShifted,
+                    onKeyPress = { key ->
+                        onKeyPress(key)
+                        if (shiftState == ShiftState.ON) shiftState = ShiftState.OFF
+                    },
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    keyColor = keyBackground,
+                    textColor = textColor
+                )
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    KeyButton(
+                        icon = if (shiftState == ShiftState.CAPS_LOCK) Icons.Default.Lock else Icons.Default.KeyboardArrowUp,
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = if (shiftState != ShiftState.OFF) primaryAccent else actionKeyBackground,
+                        iconColor = if (shiftState != ShiftState.OFF) Color.Black else textColor,
+                        onClick = {
+                            shiftState = when (shiftState) {
+                                ShiftState.OFF -> ShiftState.ON
+                                ShiftState.ON -> ShiftState.CAPS_LOCK
+                                ShiftState.CAPS_LOCK -> ShiftState.OFF
+                            }
+                        }
+                    )
+                    
+                    KeyboardRow(
+                        keys = row3,
+                        isShifted = isShifted,
+                        onKeyPress = { key ->
+                            onKeyPress(key)
+                            if (shiftState == ShiftState.ON) shiftState = ShiftState.OFF
+                        },
+                        modifier = Modifier.weight(7f),
+                        keyColor = keyBackground,
+                        textColor = textColor
+                    )
+                    
+                    KeyButton(
+                        icon = Icons.AutoMirrored.Filled.Backspace,
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = actionKeyBackground,
+                        iconColor = textColor,
+                        onClick = onBackspace
+                    )
+                }
+            }
+
+            KeyboardMode.NUMERIC -> {
+                val row1 = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
+                val row2 = listOf("@", "#", "$", "_", "&", "-", "+", "(", ")", "/")
+                val row3 = listOf("*", "\"", "'", ":", ";", "!", "?")
+
+                KeyboardRow(keys = row1, isShifted = false, onKeyPress = onKeyPress, keyColor = keyBackground, textColor = textColor)
+                KeyboardRow(keys = row2, isShifted = false, onKeyPress = onKeyPress, keyColor = keyBackground, textColor = textColor)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    KeyButton(
+                        text = "=<\n#",
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = actionKeyBackground,
+                        textColor = secondaryAccent,
+                        onClick = { keyboardMode = KeyboardMode.SYMBOL }
+                    )
+                    
+                    KeyboardRow(keys = row3, isShifted = false, onKeyPress = onKeyPress, modifier = Modifier.weight(7f), keyColor = keyBackground, textColor = textColor)
+                    
+                    KeyButton(
+                        icon = Icons.AutoMirrored.Filled.Backspace,
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = actionKeyBackground,
+                        iconColor = textColor,
+                        onClick = onBackspace
+                    )
+                }
+            }
+
+            KeyboardMode.SYMBOL -> {
+                val row1 = listOf("[", "]", "{", "}", "%", "^", "~", "`", "|", "\\")
+                val row2 = listOf("<", ">", "=", "€", "£", "¥", "§", "°", "•", "±")
+                val row3 = listOf("«", "»", "©", "®", "™", "¡", "¿")
+
+                KeyboardRow(keys = row1, isShifted = false, onKeyPress = onKeyPress, keyColor = keyBackground, textColor = textColor)
+                KeyboardRow(keys = row2, isShifted = false, onKeyPress = onKeyPress, keyColor = keyBackground, textColor = textColor)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    KeyButton(
+                        text = "?123",
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = actionKeyBackground,
+                        textColor = primaryAccent,
+                        onClick = { keyboardMode = KeyboardMode.NUMERIC }
+                    )
+                    
+                    KeyboardRow(keys = row3, isShifted = false, onKeyPress = onKeyPress, modifier = Modifier.weight(7f), keyColor = keyBackground, textColor = textColor)
+                    
+                    KeyButton(
+                        icon = Icons.AutoMirrored.Filled.Backspace,
+                        modifier = Modifier.weight(1.3f),
+                        containerColor = actionKeyBackground,
+                        iconColor = textColor,
+                        onClick = onBackspace
+                    )
+                }
+            }
         }
-        
+
+        // Bottom Row: [Mode Switcher] [Globe/Switch IME] [,] [SPACE BAR] [.] [ENTER]
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            KeyButton(text = "?123", modifier = Modifier.weight(1.5f), containerColor = actionKeyBackground, textColor = textColor, onClick = {})
-            KeyButton(text = ",", modifier = Modifier.weight(1f), containerColor = actionKeyBackground, textColor = textColor, onClick = { onKeyPress(",") })
-            KeyButton(text = "Space", modifier = Modifier.weight(4f), containerColor = keyBackground, textColor = textColor, onClick = { onKeyPress(" ") }) // Space bar
-            KeyButton(text = ".", modifier = Modifier.weight(1f), containerColor = actionKeyBackground, textColor = textColor, onClick = { onKeyPress(".") })
-            KeyButton(icon = Icons.AutoMirrored.Filled.KeyboardReturn, modifier = Modifier.weight(1.5f), containerColor = primaryAccent, iconColor = keyboardBackground, onClick = { onKeyPress("\n") })
+            KeyButton(
+                text = if (keyboardMode == KeyboardMode.ALPHA) "?123" else "ABC",
+                modifier = Modifier.weight(1.4f),
+                containerColor = actionKeyBackground,
+                textColor = primaryAccent,
+                onClick = {
+                    keyboardMode = if (keyboardMode == KeyboardMode.ALPHA) KeyboardMode.NUMERIC else KeyboardMode.ALPHA
+                }
+            )
+
+            if (onSwitchKeyboard != null) {
+                KeyButton(
+                    icon = Icons.Default.Language,
+                    modifier = Modifier.weight(1f),
+                    containerColor = actionKeyBackground,
+                    iconColor = textColor,
+                    onClick = { onSwitchKeyboard() }
+                )
+            }
+
+            KeyButton(
+                text = ",",
+                modifier = Modifier.weight(1f),
+                containerColor = actionKeyBackground,
+                textColor = textColor,
+                onClick = { onKeyPress(",") }
+            )
+
+            KeyButton(
+                text = "Space",
+                modifier = Modifier.weight(3.8f),
+                containerColor = keyBackground,
+                textColor = textColor,
+                onClick = { onKeyPress(" ") }
+            )
+
+            KeyButton(
+                text = ".",
+                modifier = Modifier.weight(1f),
+                containerColor = actionKeyBackground,
+                textColor = textColor,
+                onClick = { onKeyPress(".") }
+            )
+
+            KeyButton(
+                icon = Icons.AutoMirrored.Filled.KeyboardReturn,
+                modifier = Modifier.weight(1.4f),
+                containerColor = primaryAccent,
+                iconColor = Color.Black,
+                onClick = { onKeyPress("\n") }
+            )
         }
     }
-}
-
-enum class KeyboardPanel {
-    None, AI, RizzModes, Reply, Emoji, Translate, Tools
 }
 
 @Composable
@@ -195,49 +442,47 @@ fun SmartBar(
     textColor: Color
 ) {
     val items = listOf(
-        SmartBarItem(Icons.Default.AutoAwesome, "AI", KeyboardPanel.AI),
+        SmartBarItem(Icons.Default.AutoAwesome, "AI Ask", KeyboardPanel.AI),
         SmartBarItem(Icons.Default.Star, "Rizz", KeyboardPanel.RizzModes),
-        SmartBarItem(Icons.Default.ChatBubbleOutline, "Reply", KeyboardPanel.Reply),
-        SmartBarItem(Icons.Default.SentimentVerySatisfied, "Funny", KeyboardPanel.Emoji),
+        SmartBarItem(Icons.Default.SentimentVerySatisfied, "Emojis", KeyboardPanel.Emoji),
         SmartBarItem(Icons.Default.FavoriteBorder, "Flirt", KeyboardPanel.RizzModes),
-        SmartBarItem(Icons.Default.Translate, "Translate", KeyboardPanel.Translate),
-        SmartBarItem(Icons.Default.Edit, "Rewrite", KeyboardPanel.Tools),
-        SmartBarItem(Icons.Default.ContentPaste, "Clipboard", KeyboardPanel.Tools),
-        SmartBarItem(Icons.Default.Mic, "Voice", KeyboardPanel.Tools),
-        SmartBarItem(Icons.Default.Settings, "Settings", KeyboardPanel.Tools)
+        SmartBarItem(Icons.Default.ChatBubbleOutline, "Reply", KeyboardPanel.RizzModes)
     )
 
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(44.dp)
             .background(backgroundColor)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         items(items) { item ->
             val isActive = activePanel == item.panel
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(if (isActive) accentColor.copy(alpha = 0.2f) else Color.Transparent)
+                    .background(if (isActive) accentColor.copy(alpha = 0.25f) else Color(0xFF1B1D2A))
                     .clickable { onActionClick(item.panel) }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Icon(
                         imageVector = item.icon,
                         contentDescription = item.label,
-                        tint = if (isActive) accentColor else textColor.copy(alpha = 0.8f),
-                        modifier = Modifier.size(18.dp)
+                        tint = if (isActive) accentColor else textColor.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = item.label,
-                        color = if (isActive) accentColor else textColor.copy(alpha = 0.8f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                        color = if (isActive) accentColor else textColor.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -253,27 +498,54 @@ fun RizzModeSelector(
     textColor: Color,
     accentColor: Color
 ) {
-    val styles = listOf("Gentle", "Smooth", "Confident", "Funny", "Romantic", "Intelligent", "Savage", "Gen Z", "Friendly")
+    val styles = listOf("Smooth", "Flirt", "Confident", "Funny", "Romantic", "Intelligent", "Savage", "Gen Z", "Comeback", "Apology")
     
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(styles) { style ->
             Surface(
                 modifier = Modifier.clickable { onModeSelected(style) },
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0xFF2C2C2C),
-                border = null
+                color = Color(0xFF272A3D)
             ) {
                 Text(
-                    text = style,
+                    text = "✨ $style",
                     color = textColor,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun EmojiQuickBar(
+    onEmojiClick: (String) -> Unit,
+    textColor: Color
+) {
+    val emojis = listOf("🔥", "❤️", "😂", "✨", "👀", "💅", "💯", "💀", "🚀", "🤫", "🤌", "🥳", "😈", "🤯", "🤙", "💡", "😜", "🙈")
+    
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        items(emojis) { emoji ->
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onEmojiClick(emoji) }
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = emoji, fontSize = 20.sp)
             }
         }
     }
@@ -290,25 +562,24 @@ fun AiReplyPanel(
     accentColor: Color
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = backgroundColor),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             if (isGenerating) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = accentColor, strokeWidth = 2.dp)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text("Generating rizz...", color = textColor, fontSize = 14.sp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = accentColor, strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Rizz AI is generating response...", color = textColor, fontSize = 13.sp)
                 }
             } else if (generatedReply != null) {
                 Text(
                     text = generatedReply,
                     color = textColor,
-                    fontSize = 15.sp,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -316,14 +587,15 @@ fun AiReplyPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onClear) {
-                        Text("Dismiss", color = Color.Gray)
+                        Text("Dismiss", color = Color.Gray, fontSize = 12.sp)
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Button(
                         onClick = onInsert,
-                        colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Text("Insert", color = Color.Black)
+                        Text("Insert Text", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }
@@ -334,7 +606,7 @@ fun AiReplyPanel(
 @Composable
 fun KeyboardRow(
     keys: List<String>,
-    isShiftEnabled: Boolean,
+    isShifted: Boolean,
     onKeyPress: (String) -> Unit,
     modifier: Modifier = Modifier,
     keyColor: Color,
@@ -343,11 +615,11 @@ fun KeyboardRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 4.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+            .padding(horizontal = 2.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         for (key in keys) {
-            val displayKey = if (isShiftEnabled) key.uppercase() else key
+            val displayKey = if (isShifted) key.uppercase() else key
             KeyButton(
                 text = displayKey, 
                 modifier = Modifier.weight(1f),
@@ -365,9 +637,9 @@ fun KeyButton(
     text: String? = null,
     icon: ImageVector? = null,
     modifier: Modifier = Modifier,
-    containerColor: Color = Color(0xFF2B2D30),
-    textColor: Color = Color(0xFFE2E2E2),
-    iconColor: Color = Color(0xFFE2E2E2),
+    containerColor: Color = Color(0xFF1B1D2A),
+    textColor: Color = Color(0xFFF0F2FA),
+    iconColor: Color = Color(0xFFF0F2FA),
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -375,19 +647,19 @@ fun KeyButton(
     
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = tween(durationMillis = 100),
+        animationSpec = tween(durationMillis = 80),
         label = "KeyScale"
     )
     
     val alpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.7f else 1f,
-        animationSpec = tween(durationMillis = 100),
+        targetValue = if (isPressed) 0.65f else 1f,
+        animationSpec = tween(durationMillis = 80),
         label = "KeyAlpha"
     )
 
     Box(
         modifier = modifier
-            .height(52.dp) // Premium height, similar to Gboard
+            .height(50.dp)
             .shadow(1.dp, RoundedCornerShape(8.dp))
             .clip(RoundedCornerShape(8.dp))
             .background(containerColor.copy(alpha = alpha))
@@ -406,10 +678,16 @@ fun KeyButton(
             contentAlignment = Alignment.Center
         ) {
             if (text != null) {
-                Text(text = text, color = textColor, fontSize = 22.sp, fontWeight = FontWeight.Normal)
+                Text(
+                    text = text,
+                    color = textColor,
+                    fontSize = if (text.length > 2) 13.sp else 20.sp,
+                    fontWeight = if (text.length > 2) FontWeight.SemiBold else FontWeight.Medium
+                )
             } else if (icon != null) {
-                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(22.dp))
             }
         }
     }
 }
+

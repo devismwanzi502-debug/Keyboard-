@@ -9,31 +9,32 @@ import com.example.repository.RizzRepository
 import com.example.data.local.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class RizzAccessibilityService : AccessibilityService() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
-    private lateinit var repository: RizzRepository
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var repository: RizzRepository? = null
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        val database = AppDatabase.getDatabase(this)
-        repository = RizzRepository(database.messageDao(), SettingsRepository(this))
+        try {
+            val database = AppDatabase.getDatabase(this)
+            repository = RizzRepository(database.messageDao(), SettingsRepository(this))
+        } catch (e: Exception) {
+            Log.e("RizzAccessibility", "Error initializing database in service", e)
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> {
-                val source = event.source ?: return
-                handleNodeContent(source)
-            }
+            AccessibilityEvent.TYPE_VIEW_LONG_CLICKED,
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
                 val source = event.source ?: return
-                // Check if it's a copy action or just clicking on a message
-                // We'll optionally capture text from clicked views as well
                 handleNodeContent(source)
             }
         }
@@ -43,15 +44,24 @@ class RizzAccessibilityService : AccessibilityService() {
         val text = node.text?.toString() ?: node.contentDescription?.toString()
         if (!text.isNullOrBlank()) {
             Log.d("RizzAccessibility", "Intercepted text: $text")
-            // We consider text captured via long click as an incoming message
+            val repo = repository ?: return
             serviceScope.launch {
-                repository.insertMessage(text, isIncoming = true)
+                try {
+                    repo.insertMessage(text, isIncoming = true)
+                } catch (e: Exception) {
+                    Log.e("RizzAccessibility", "Error saving intercepted text", e)
+                }
             }
         }
-        node.recycle()
     }
 
     override fun onInterrupt() {
         // Handle interrupt
     }
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
 }
+
