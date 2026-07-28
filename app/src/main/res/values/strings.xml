@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RizzBoard AI</string>
+    <string name="ime_name">RizzBoard Keyboard</string>
+    <string name="accessibility_service_description">Reads messages from chat apps to generate context-aware AI replies.</string>
+</resources>

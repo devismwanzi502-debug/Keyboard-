@@ -1,0 +1,6 @@
+{
+  "name": "RizzBoard AI",
+  "description": "An AI-powered custom Android keyboard for generating smart, context-aware replies using Gemini API.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
