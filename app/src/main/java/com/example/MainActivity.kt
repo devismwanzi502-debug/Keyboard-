@@ -84,9 +84,11 @@ fun MainScreen(
     
     val autoType by settingsRepository.autoTypeFlow.collectAsState(initial = false)
     val memory by settingsRepository.conversationMemoryFlow.collectAsState(initial = true)
+    val autoCorrect by settingsRepository.autoCorrectFlow.collectAsState(initial = true)
     
     var apiKeyInput by remember(apiKey) { mutableStateOf(apiKey ?: "") }
     var groqApiKeyInput by remember(groqApiKey) { mutableStateOf(groqApiKey ?: "") }
+    var saveStatusMsg by remember { mutableStateOf<String?>(null) }
     
     var testText by remember { mutableStateOf("") }
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Setup & Test, 1: Settings
@@ -288,17 +290,42 @@ fun MainScreen(
                     }
                 }
                 
+                if (saveStatusMsg != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = saveStatusMsg!!,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 if (apiProvider == "Gemini") {
                     OutlinedTextField(
                         value = apiKeyInput,
                         onValueChange = { apiKeyInput = it },
                         label = { Text("Gemini API Key (Optional)") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            if (!apiKey.isNullOrBlank()) {
+                                Text("✓ Custom Gemini API Key is saved", color = MaterialTheme.colorScheme.primary)
+                            } else {
+                                Text("Using default built-in AI key", color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
                     )
                     
                     Button(
                         onClick = {
-                            coroutineScope.launch { settingsRepository.saveApiKey(apiKeyInput) }
+                            coroutineScope.launch { 
+                                settingsRepository.saveApiKey(apiKeyInput.trim())
+                                saveStatusMsg = "Gemini API Key saved successfully!"
+                                android.widget.Toast.makeText(context, "Gemini API Key saved!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -309,12 +336,21 @@ fun MainScreen(
                         value = groqApiKeyInput,
                         onValueChange = { groqApiKeyInput = it },
                         label = { Text("Groq API Key") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            if (!groqApiKey.isNullOrBlank()) {
+                                Text("✓ Custom Groq API Key is saved", color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     )
                     
                     Button(
                         onClick = {
-                            coroutineScope.launch { settingsRepository.saveGroqApiKey(groqApiKeyInput) }
+                            coroutineScope.launch { 
+                                settingsRepository.saveGroqApiKey(groqApiKeyInput.trim())
+                                saveStatusMsg = "Groq API Key saved successfully!"
+                                android.widget.Toast.makeText(context, "Groq API Key saved!", android.widget.Toast.LENGTH_SHORT).show()
+                            }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -329,7 +365,27 @@ fun MainScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Auto-Type AI Reply")
+                    Column {
+                        Text("Auto-Correct", fontWeight = FontWeight.Bold)
+                        Text("Fix common typos & suggest completions", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(
+                        checked = autoCorrect,
+                        onCheckedChange = { 
+                            coroutineScope.launch { settingsRepository.setAutoCorrect(it) } 
+                        }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Auto-Type AI Reply", fontWeight = FontWeight.Bold)
+                        Text("Automatically insert generated text into app", style = MaterialTheme.typography.bodySmall)
+                    }
                     Switch(
                         checked = autoType,
                         onCheckedChange = { 
@@ -343,7 +399,10 @@ fun MainScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Conversation Memory")
+                    Column {
+                        Text("Conversation Memory", fontWeight = FontWeight.Bold)
+                        Text("Use chat context for smarter rizz replies", style = MaterialTheme.typography.bodySmall)
+                    }
                     Switch(
                         checked = memory,
                         onCheckedChange = { 

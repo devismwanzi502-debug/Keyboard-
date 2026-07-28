@@ -25,7 +25,10 @@ class SettingsRepository(context: Context) {
     
     private val AUTO_TYPE = booleanPreferencesKey("auto_type")
     private val CONVERSATION_MEMORY = booleanPreferencesKey("conversation_memory")
+    private val AUTO_CORRECT = booleanPreferencesKey("auto_correct")
     private val REPLY_STYLE = stringPreferencesKey("reply_style")
+
+    private val sharedPrefs = appContext.getSharedPreferences("rizzboard_prefs", Context.MODE_PRIVATE)
 
     private val safeData: Flow<Preferences> = appContext.dataStore.data.catch { exception ->
         if (exception is IOException) {
@@ -36,30 +39,35 @@ class SettingsRepository(context: Context) {
     }
 
     val apiKeyFlow: Flow<String?> = safeData.map { preferences ->
-        preferences[API_KEY]
+        preferences[API_KEY] ?: sharedPrefs.getString("api_key", null)
     }
 
     val groqApiKeyFlow: Flow<String?> = safeData.map { preferences ->
-        preferences[GROQ_API_KEY]
+        preferences[GROQ_API_KEY] ?: sharedPrefs.getString("groq_api_key", null)
     }
     
     val apiProviderFlow: Flow<String> = safeData.map { preferences ->
-        preferences[API_PROVIDER] ?: "Gemini"
+        preferences[API_PROVIDER] ?: sharedPrefs.getString("api_provider", "Gemini") ?: "Gemini"
     }
 
     val autoTypeFlow: Flow<Boolean> = safeData.map { preferences ->
-        preferences[AUTO_TYPE] ?: false
+        preferences[AUTO_TYPE] ?: sharedPrefs.getBoolean("auto_type", false)
     }
 
     val conversationMemoryFlow: Flow<Boolean> = safeData.map { preferences ->
-        preferences[CONVERSATION_MEMORY] ?: true
+        preferences[CONVERSATION_MEMORY] ?: sharedPrefs.getBoolean("conversation_memory", true)
+    }
+
+    val autoCorrectFlow: Flow<Boolean> = safeData.map { preferences ->
+        preferences[AUTO_CORRECT] ?: sharedPrefs.getBoolean("auto_correct", true)
     }
     
     val replyStyleFlow: Flow<String> = safeData.map { preferences ->
-        preferences[REPLY_STYLE] ?: "Smooth"
+        preferences[REPLY_STYLE] ?: sharedPrefs.getString("reply_style", "Smooth") ?: "Smooth"
     }
 
     suspend fun saveApiKey(apiKey: String) {
+        sharedPrefs.edit().putString("api_key", apiKey).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[API_KEY] = apiKey
@@ -70,6 +78,7 @@ class SettingsRepository(context: Context) {
     }
 
     suspend fun saveGroqApiKey(apiKey: String) {
+        sharedPrefs.edit().putString("groq_api_key", apiKey).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[GROQ_API_KEY] = apiKey
@@ -80,6 +89,7 @@ class SettingsRepository(context: Context) {
     }
     
     suspend fun setApiProvider(provider: String) {
+        sharedPrefs.edit().putString("api_provider", provider).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[API_PROVIDER] = provider
@@ -90,6 +100,7 @@ class SettingsRepository(context: Context) {
     }
 
     suspend fun setAutoType(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("auto_type", enabled).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[AUTO_TYPE] = enabled
@@ -100,6 +111,7 @@ class SettingsRepository(context: Context) {
     }
 
     suspend fun setConversationMemory(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("conversation_memory", enabled).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[CONVERSATION_MEMORY] = enabled
@@ -108,8 +120,20 @@ class SettingsRepository(context: Context) {
             e.printStackTrace()
         }
     }
+
+    suspend fun setAutoCorrect(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("auto_correct", enabled).apply()
+        try {
+            appContext.dataStore.edit { preferences ->
+                preferences[AUTO_CORRECT] = enabled
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
     
     suspend fun setReplyStyle(style: String) {
+        sharedPrefs.edit().putString("reply_style", style).apply()
         try {
             appContext.dataStore.edit { preferences ->
                 preferences[REPLY_STYLE] = style
